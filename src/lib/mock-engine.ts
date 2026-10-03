@@ -18,13 +18,15 @@ interface GlobalStore {
 declare global {
   // eslint-disable-next-line no-var
   var __kasaAutoBoxStore: GlobalStore | undefined;
+  // eslint-disable-next-line no-var
+  var __kasaHeartbeatStarted: boolean | undefined;
 }
 
 function getStore(): GlobalStore {
   if (!global.__kasaAutoBoxStore) {
     const now = new Date();
     
-    // Initial active sandboxes (ONLY ACTIVE ONES)
+    // Seed initial active sandboxes (Audi RS6 and Tesla Model Y)
     const initialSandboxes: EphemeralSandbox[] = [
       {
         id: 'sbx-bay-819',
@@ -60,9 +62,9 @@ function getStore(): GlobalStore {
         id: 'sbx-obd-404',
         name: 'High-Throughput CAN Ingestion Node',
         templateId: 'obd-telematics',
-        status: 'EXPIRING_SOON',
-        createdAt: new Date(now.getTime() - 50 * 60 * 1000).toISOString(),
-        expiresAt: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
+        status: 'HEALTHY',
+        createdAt: new Date(now.getTime() - 20 * 60 * 1000).toISOString(),
+        expiresAt: new Date(now.getTime() + 40 * 60 * 1000).toISOString(),
         initialTtlMinutes: 60,
         vehicle: PRESET_VEHICLES[1], // Ford Ranger Raptor
         endpointUrl: 'https://sbx-obd-404.us-east-1.ecs.kasa-autobox.net/telemetry/stream',
@@ -73,7 +75,7 @@ function getStore(): GlobalStore {
           accessKeyId: 'ASIAR928BKAOTEMP404Y',
           secretAccessKey: 'wL9x8J+m1R3t4VqS2kK3hN0jP9rE5gF7cB1aZ3d8',
           sessionToken: 'IQoJb3JpZ2luX2VjEOr//////////wEaCXVzLWVhc3QtMSJHMEUCIQDf8k2w...kasa-ephemeral-session-obd404',
-          expiration: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
+          expiration: new Date(now.getTime() + 40 * 60 * 1000).toISOString(),
           scopedRoleArn: 'arn:aws:iam::492817290192:role/kasa-ephemeral-sandbox-role',
         },
         telemetry: {
@@ -226,16 +228,73 @@ function getStore(): GlobalStore {
       totalLaunched: 14,
     };
   }
+
+  // Start continuous realistic automotive telemetry heartbeat
+  if (!global.__kasaHeartbeatStarted) {
+    global.__kasaHeartbeatStarted = true;
+    const heartbeatTimer = setInterval(() => {
+      const store = global.__kasaAutoBoxStore;
+      if (!store || store.sandboxes.length === 0) return;
+
+      // Pick a random active sandbox to emit dynamic live telemetry
+      const active = store.sandboxes.filter(s => s.status !== 'TERMINATED');
+      if (active.length === 0) return;
+
+      const randomSandbox = active[Math.floor(Math.random() * active.length)];
+      const randRpm = Math.floor(800 + Math.random() * 2200);
+      const randSpeed = Math.floor(Math.random() * 85);
+
+      // Pulse telemetry on the live sandbox
+      randomSandbox.telemetry.rpm = randRpm;
+      randomSandbox.telemetry.speedKmh = randSpeed;
+
+      const logTemplates = [
+        {
+          level: 'CAN_BUS' as const,
+          source: 'kasa:obd2:can_router',
+          message: `CAN-BUS Broadcast: Engine RPM=${randRpm}, Speed=${randSpeed} km/h, Coolant Temp=${randomSandbox.telemetry.engineTempC}°C.`,
+          payload: { canId: '0x7DF', rpm: randRpm, speedKmh: randSpeed, busLoadPct: '14.2%' },
+        },
+        {
+          level: 'INFO' as const,
+          source: 'aws:ecs:telemetry_streamer',
+          message: `HTTP 200 GET /telemetry/stream - Health check nominal. Latency: ${Math.floor(8 + Math.random() * 20)}ms.`,
+          payload: { endpoint: randomSandbox.endpointUrl, status: 200, activeConnections: 3 },
+        },
+        {
+          level: 'INFO' as const,
+          source: 'kasa:ecu:sensor_sweep',
+          message: `Diagnostic Sweep Complete: O2 Sensor Lambda=1.002, Voltage=${(13.8 + Math.random() * 0.4).toFixed(2)}V DC.`,
+          payload: { batteryVoltage: 13.95, lambda: 1.002, fuelTrim: '+1.4%' },
+        },
+      ];
+
+      const chosen = logTemplates[Math.floor(Math.random() * logTemplates.length)];
+      addLog({
+        sandboxId: randomSandbox.id,
+        level: chosen.level,
+        source: chosen.source,
+        message: chosen.message,
+        payload: chosen.payload,
+      });
+    }, 2500);
+
+    if (typeof heartbeatTimer?.unref === 'function') {
+      heartbeatTimer.unref();
+    }
+  }
+
   return global.__kasaAutoBoxStore;
 }
 
 // Check for duplicate vehicle actively running
 export function findActiveSandboxByVin(vin: string): EphemeralSandbox | undefined {
   const store = getStore();
-  return store.sandboxes.find(s => s.vehicle.vin === vin);
+  const now = Date.now();
+  return store.sandboxes.find(s => s.vehicle.vin === vin && new Date(s.expiresAt).getTime() > now);
 }
 
-// List ONLY ACTIVE sandboxes (auto-archives expired ones so they don't clutter!)
+// List ONLY ACTIVE sandboxes (auto-archives expired ones so they never clutter the main bay)
 export function listSandboxes(): EphemeralSandbox[] {
   const store = getStore();
   const now = Date.now();
@@ -263,7 +322,7 @@ export function listSandboxes(): EphemeralSandbox[] {
 }
 
 // Archive a sandbox to cold storage
-function archiveSandbox(sbx: EphemeralSandbox, reason: 'TTL_EXPIRED' | 'USER_TERMINATED' | 'FORCE_REPLACED') {
+export function archiveSandbox(sbx: EphemeralSandbox, reason: 'TTL_EXPIRED' | 'USER_TERMINATED' | 'FORCE_REPLACED') {
   const store = getStore();
   const now = new Date();
   const createdMs = new Date(sbx.createdAt).getTime();
@@ -319,8 +378,8 @@ export function listArchivedSandboxes(filter: 'week' | 'month' | 'year' = 'month
 }
 
 export function getSandboxById(id: string): EphemeralSandbox | undefined {
-  const sandboxes = listSandboxes();
-  return sandboxes.find(s => s.id === id);
+  const store = getStore();
+  return store.sandboxes.find(s => s.id === id);
 }
 
 export function createSandbox(params: {
@@ -452,9 +511,7 @@ export function extendTtl(id: string, additionalMinutes: number = 30): Ephemeral
   
   sandbox.expiresAt = newExpiry.toISOString();
   sandbox.credentials.expiration = newExpiry.toISOString();
-  if (sandbox.status === 'EXPIRING_SOON') {
-    sandbox.status = 'HEALTHY';
-  }
+  sandbox.status = 'HEALTHY';
 
   addLog({
     sandboxId: id,
@@ -548,7 +605,7 @@ export function injectDiagnosticEvent(
 
 export function getLogs(sandboxId?: string): CloudWatchLogEntry[] {
   const store = getStore();
-  if (!sandboxId) return store.logs;
+  if (!sandboxId || sandboxId === 'all') return store.logs;
   return store.logs.filter(l => l.sandboxId === sandboxId);
 }
 

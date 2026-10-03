@@ -14,6 +14,8 @@ import {
   AlertCircle, 
   Car,
   Terminal,
+  Clock,
+  X,
   ShieldAlert
 } from 'lucide-react';
 import { EphemeralSandbox } from '@/types/sandbox';
@@ -39,7 +41,9 @@ export function SandboxCard({
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedVin, setCopiedVin] = useState(false);
   const [isExtending, setIsExtending] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
+  const [extendSuccess, setExtendSuccess] = useState(false);
 
   const copyUrl = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,16 +62,37 @@ export function SandboxCard({
   const handleExtend = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsExtending(true);
+    setExtendSuccess(false);
     await onExtendTtl(sandbox.id);
     setIsExtending(false);
+    setExtendSuccess(true);
+    setTimeout(() => setExtendSuccess(false), 2500);
   };
 
-  const handleTerminate = async (e: React.MouseEvent) => {
+  const handleStartDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Are you sure you want to terminate sandbox ${sandbox.id}?`)) {
-      setIsTerminating(true);
-      await onTerminate(sandbox.id);
-      setIsTerminating(false);
+    setIsConfirmingDelete(true);
+  };
+
+  const handleCancelDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsConfirmingDelete(false);
+  };
+
+  const handleConfirmDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsTerminating(true);
+    await onTerminate(sandbox.id);
+    setIsTerminating(false);
+    setIsConfirmingDelete(false);
+  };
+
+  const handleCardClick = () => {
+    onSelect();
+    // Smooth scroll down to the terminal to show live action
+    const terminalEl = document.getElementById('cloudwatch-terminal-section');
+    if (terminalEl) {
+      terminalEl.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -75,7 +100,7 @@ export function SandboxCard({
 
   return (
     <div
-      onClick={onSelect}
+      onClick={handleCardClick}
       className={`rounded-lg border transition-all cursor-pointer overflow-hidden ${
         isSelected
           ? 'bg-surface-raised border-nominal shadow-lg shadow-nominal/5 ring-1 ring-nominal/20'
@@ -95,13 +120,17 @@ export function SandboxCard({
           </div>
           <p className="text-xs text-slate-400 flex items-center gap-1.5 font-mono">
             <Car className="w-3.5 h-3.5 text-slate-400" />
-            <span>{sandbox.vehicle.model}</span>
+            <span className="text-slate-300 font-medium">{sandbox.vehicle.model}</span>
           </p>
         </div>
 
-        {/* Real-time Countdown Clock */}
+        {/* Real-time Countdown Clock with Auto-Expire hook */}
         <div className="shrink-0">
-          <CountdownClock expiresAt={sandbox.expiresAt} size="sm" />
+          <CountdownClock 
+            expiresAt={sandbox.expiresAt} 
+            onExpire={() => onTerminate(sandbox.id)}
+            size="sm" 
+          />
         </div>
       </div>
 
@@ -113,12 +142,12 @@ export function SandboxCard({
           <div className="flex items-center justify-between p-2 rounded bg-surface-inset border border-surface-border">
             <div className="truncate">
               <span className="text-slate-500 block text-[10px]">VEHICLE VIN</span>
-              <span className="text-slate-300 font-bold">{sandbox.vehicle.vin}</span>
+              <span className="text-slate-200 font-bold">{sandbox.vehicle.vin}</span>
             </div>
             <button
               onClick={copyVin}
               className="p-1 rounded hover:bg-surface-border text-slate-400 hover:text-slate-200 transition-colors"
-              title="Copy VIN"
+              title="Copiar VIN"
             >
               {copiedVin ? <Check className="w-3.5 h-3.5 text-nominal" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
@@ -134,7 +163,7 @@ export function SandboxCard({
               <button
                 onClick={copyUrl}
                 className="p-1 rounded hover:bg-surface-border text-slate-400 hover:text-slate-200 transition-colors"
-                title="Copy Direct URL"
+                title="Copiar URL directa"
               >
                 {copiedUrl ? <Check className="w-3.5 h-3.5 text-nominal" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
@@ -144,7 +173,7 @@ export function SandboxCard({
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className="p-1 rounded hover:bg-surface-border text-slate-400 hover:text-slate-200 transition-colors"
-                title="Open Service Endpoint"
+                title="Abrir servicio en pestaña nueva"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -220,45 +249,67 @@ export function SandboxCard({
             onOpenCredentials(sandbox);
           }}
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-raised hover:bg-surface-hover border border-surface-border text-xs font-mono text-slate-200 hover:text-white transition-colors"
-          title="View Scoped STS Credentials"
+          title="Ver credenciales temporales STS"
         >
           <Key className="w-3.5 h-3.5 text-nominal" />
           <span>STS Token</span>
         </button>
 
         {/* Life cycle actions */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           {!isTerminated && (
             <>
+              {/* +30m Extension Button */}
               <button
                 onClick={handleExtend}
                 disabled={isExtending}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-surface-raised hover:bg-surface-hover border border-surface-border text-xs font-mono text-slate-300 hover:text-nominal transition-colors disabled:opacity-50"
-                title="Extend environment lifetime by 30 minutes"
+                title="Extender tiempo de vida por 30 minutos"
               >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>+30m</span>
+                <PlusCircle className={`w-3.5 h-3.5 ${isExtending ? 'animate-spin' : ''}`} />
+                <span>{extendSuccess ? '+30m OK!' : '+30m'}</span>
               </button>
 
-              <button
-                onClick={handleTerminate}
-                disabled={isTerminating}
-                className="p-1.5 rounded hover:bg-critical/20 text-slate-400 hover:text-critical transition-colors disabled:opacity-50"
-                title="Immediate Teardown"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {/* In-Card Direct Delete Confirmation (No native confirm popup!) */}
+              {isConfirmingDelete ? (
+                <div className="flex items-center gap-1 animate-in fade-in" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={handleConfirmDelete}
+                    disabled={isTerminating}
+                    className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-700 text-white font-bold text-xs font-mono transition-colors disabled:opacity-50 shadow-sm"
+                    title="Confirmar destrucción de recursos"
+                  >
+                    {isTerminating ? 'Cerrando...' : '¿Confirmar?'}
+                  </button>
+                  <button
+                    onClick={handleCancelDelete}
+                    className="p-1 rounded bg-surface-raised hover:bg-surface-hover text-slate-400 hover:text-slate-200"
+                    title="Cancelar"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStartDelete}
+                  className="p-1.5 rounded hover:bg-critical/20 text-slate-400 hover:text-critical transition-colors"
+                  title="Cerrar y archivar sandbox"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </>
           )}
 
+          {/* Inspect trigger badge */}
           <div
-            className={`px-2 py-1 text-xs font-mono rounded ${
+            className={`px-2 py-1 text-xs font-mono rounded transition-colors ${
               isSelected
                 ? 'bg-nominal text-slate-950 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'bg-surface-raised border border-surface-border text-slate-300 hover:text-white'
             }`}
           >
-            {isSelected ? 'Active Bay' : 'Inspect'}
+            {isSelected ? 'Active Bay' : 'Inspect ➔'}
           </div>
         </div>
       </div>

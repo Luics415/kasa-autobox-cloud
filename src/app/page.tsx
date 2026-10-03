@@ -60,11 +60,19 @@ export default function Home() {
       const res = await fetch('/api/sandboxes');
       if (res.ok) {
         const data = await res.json();
-        setSandboxes(data.sandboxes || []);
+        const incoming: EphemeralSandbox[] = data.sandboxes || [];
+        
+        // Filter out expired on the client side immediately!
+        const now = Date.now();
+        const strictlyActive = incoming.filter(
+          s => s.status !== 'TERMINATED' && new Date(s.expiresAt).getTime() > now
+        );
+
+        setSandboxes(strictlyActive);
         
         // Auto-select first sandbox if none selected
-        if (!selectedSandboxId && data.sandboxes?.length > 0) {
-          setSelectedSandboxId(data.sandboxes[0].id);
+        if (!selectedSandboxId && strictlyActive.length > 0) {
+          setSelectedSandboxId(strictlyActive[0].id);
         }
       }
     } catch (err) {
@@ -113,7 +121,7 @@ export default function Home() {
       loadSandboxes();
       loadLogs();
       loadStats();
-    }, 4000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [refreshAll, loadSandboxes, loadLogs, loadStats]);
@@ -172,6 +180,9 @@ export default function Home() {
   const handleConflictFocusExisting = () => {
     if (conflictExisting) {
       setSelectedSandboxId(conflictExisting.id);
+      // Scroll to active bay
+      const el = document.getElementById(`bay-${conflictExisting.id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
     setIsConflictOpen(false);
   };
@@ -182,8 +193,19 @@ export default function Home() {
     setIsConflictOpen(false);
   };
 
-  // Extend TTL
+  // Extend TTL with Optimistic Local Update
   const handleExtendTtl = async (id: string) => {
+    // 1. Optimistic update
+    setSandboxes(prev => prev.map(sbx => {
+      if (sbx.id === id) {
+        const currentMs = new Date(sbx.expiresAt).getTime();
+        const newExpiry = new Date(Math.max(Date.now(), currentMs) + 30 * 60 * 1000).toISOString();
+        return { ...sbx, expiresAt: newExpiry, status: 'HEALTHY' };
+      }
+      return sbx;
+    }));
+
+    // 2. Server persistence
     try {
       const res = await fetch(`/api/sandboxes/${id}`, {
         method: 'PATCH',
@@ -198,8 +220,16 @@ export default function Home() {
     }
   };
 
-  // Terminate Sandbox
+  // Terminate Sandbox with Optimistic Local Removal
   const handleTerminate = async (id: string) => {
+    // 1. Optimistic removal from active view immediately!
+    setSandboxes(prev => prev.filter(sbx => sbx.id !== id));
+    if (selectedSandboxId === id) {
+      const remaining = sandboxes.filter(sbx => sbx.id !== id);
+      setSelectedSandboxId(remaining[0]?.id || '');
+    }
+
+    // 2. Server persistence & move to cold storage
     try {
       const res = await fetch(`/api/sandboxes/${id}`, {
         method: 'DELETE',
@@ -210,6 +240,12 @@ export default function Home() {
     } catch (err) {
       console.error('Error terminating sandbox:', err);
     }
+  };
+
+  // Select Sandbox & Focus Inspector
+  const handleSelectSandbox = (id: string) => {
+    setSelectedSandboxId(id);
+    loadLogs(id);
   };
 
   // Relaunch from Archive
@@ -338,6 +374,7 @@ export default function Home() {
               <SandboxLauncher
                 onLaunch={handleLaunchSandbox}
                 isLaunching={isLaunching}
+                activeSandboxes={sandboxes}
               />
             </section>
 
@@ -351,7 +388,7 @@ export default function Home() {
                   </h2>
                 </div>
                 <span className="text-xs font-mono text-slate-400">
-                  Los entornos caducados se archivan automáticamente para no saturar esta bahía
+                  Los entornos caducados se archivan automáticamente para mantener limpia esta bahía
                 </span>
               </div>
 
@@ -367,15 +404,16 @@ export default function Home() {
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {sandboxes.map((sbx) => (
-                    <SandboxCard
-                      key={sbx.id}
-                      sandbox={sbx}
-                      isSelected={sbx.id === selectedSandboxId}
-                      onSelect={() => setSelectedSandboxId(sbx.id)}
-                      onExtendTtl={handleExtendTtl}
-                      onTerminate={handleTerminate}
-                      onOpenCredentials={handleOpenCredentials}
-                    />
+                    <div id={`bay-${sbx.id}`} key={sbx.id}>
+                      <SandboxCard
+                        sandbox={sbx}
+                        isSelected={sbx.id === selectedSandboxId}
+                        onSelect={() => handleSelectSandbox(sbx.id)}
+                        onExtendTtl={handleExtendTtl}
+                        onTerminate={handleTerminate}
+                        onOpenCredentials={handleOpenCredentials}
+                      />
+                    </div>
                   ))}
                 </div>
               )}
@@ -392,7 +430,7 @@ export default function Home() {
               </div>
 
               {/* Right Column (7 cols): Enriched Terminal CloudWatch Logs */}
-              <div className="lg:col-span-7 space-y-4">
+              <div id="cloudwatch-terminal-section" className="lg:col-span-7 space-y-4">
                 <LogTerminal
                   logs={logs}
                   selectedSandboxId={selectedSandboxId}

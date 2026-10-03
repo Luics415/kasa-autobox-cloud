@@ -90,3 +90,4 @@ const metrics = calculateFinOpsMetrics();
 console.log(`[PASS] FinOps Metrics: $${metrics.estimatedCostAvoidedUsd} saved, ${metrics.zombieHoursPrevented} zombie hours eliminated`);
 
 console.log('\n🎉 ALL PRODUCTION CHECKS AND REQUIREMENTS PASSED 100%!');
+process.exit(0);
