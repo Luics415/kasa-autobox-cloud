@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ground: #0a0c10;
+  --surface-raised: #12161f;
+  --surface-inset: #07080c;
+  --surface-border: #1e2638;
+  --nominal: #10b981;
+  --warning: #f59e0b;
+  --critical: #ef4444;
+  --aws-blue: #3b82f6;
+}
+
+body {
+  background-color: var(--ground);
+  color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Impeccable Design: Theme browser surfaces */
+::selection {
+  background: rgba(16, 185, 129, 0.25);
+  color: #f8fafc;
+}
+
+/* Impeccable Custom Tactical Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0c10;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2638;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2d3748;
+}
+
+/* Tabular Numbers for Time, Telemetry & IDs */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle tactical grid background pattern */
+.tactical-grid {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(30, 38, 56, 0.3) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 38, 56, 0.3) 1px, transparent 1px);
+}

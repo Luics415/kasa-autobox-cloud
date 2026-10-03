@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  kasa-autobox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kasa-autobox-cloud
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_APP_MODE=mock
+      - AWS_REGION=us-east-1
+    restart: unless-stopped
