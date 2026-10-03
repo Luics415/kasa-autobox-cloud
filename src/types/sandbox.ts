@@ -68,6 +68,22 @@ export interface EphemeralSandbox {
   telemetry: VehicleTelemetryState;
 }
 
+export interface ArchivedSandbox {
+  id: string;
+  name: string;
+  templateId: SandboxTemplateId;
+  vehicle: VehicleProfile;
+  createdAt: string;
+  terminatedAt: string;
+  terminationReason: 'TTL_EXPIRED' | 'USER_TERMINATED' | 'FORCE_REPLACED';
+  totalUptimeMinutes: number;
+  estimatedCostUsd: number;
+  finalDtcs: Array<{ code: string; description: string }>;
+  compressedPayloadSnippet: string;
+  compressedSizeKb: number;
+  logCount: number;
+}
+
 export interface CloudWatchLogEntry {
   id: string;
   timestamp: string;
@@ -75,6 +91,12 @@ export interface CloudWatchLogEntry {
   level: 'INFO' | 'WARN' | 'ERROR' | 'CAN_BUS' | 'STS_AUTH';
   source: string;
   message: string;
+  traceId?: string;
+  requestId?: string;
+  durationMs?: number;
+  memoryUsageMb?: number;
+  cpuPct?: number;
+  httpStatusCode?: number;
   payload?: Record<string, unknown>;
 }
 
@@ -85,4 +107,10 @@ export interface FinOpsMetrics {
   estimatedCostAvoidedUsd: number;
   averageTtlMinutes: number;
   carbonGramsAvoided: number;
+}
+
+export interface SandboxConflictData {
+  hasConflict: boolean;
+  existingSandbox: EphemeralSandbox;
+  vehicle: VehicleProfile;
 }

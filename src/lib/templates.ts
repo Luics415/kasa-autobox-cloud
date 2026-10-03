@@ -62,4 +62,39 @@ export const PRESET_VEHICLES: VehicleProfile[] = [
     odometerKm: 27800,
     fuelType: 'EV',
   },
+  {
+    vin: '3C6UR5FL9NG198302',
+    model: 'RAM 2500 Heavy Duty Cummins 6.7L',
+    licensePlate: 'TR-772-HD',
+    odometerKm: 68400,
+    fuelType: 'DIESEL',
+  },
+  {
+    vin: 'JN1CV7EK8MM029145',
+    model: 'Nissan Frontier PRO-4X 3.8L V6',
+    licensePlate: 'NF-304-PX',
+    odometerKm: 15200,
+    fuelType: 'GASOLINE',
+  },
+  {
+    vin: 'WP0AB2Y12NSA91823',
+    model: 'Porsche Taycan 4S Cross Turismo',
+    licensePlate: 'PO-911-EV',
+    odometerKm: 12900,
+    fuelType: 'EV',
+  },
+  {
+    vin: 'KMHD84LF7NU019482',
+    model: 'Hyundai Tucson Plug-in Hybrid HTRAC',
+    licensePlate: 'HY-412-TU',
+    odometerKm: 21350,
+    fuelType: 'HYBRID',
+  },
+  {
+    vin: 'YV2R402C8FA019283',
+    model: 'Volvo FH16 Commercial Workshop Fleet',
+    licensePlate: 'VO-881-CM',
+    odometerKm: 145000,
+    fuelType: 'DIESEL',
+  }
 ];

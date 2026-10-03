@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { templateId, ttlMinutes, vehicleVin, customName } = body;
+    const { templateId, ttlMinutes, vehicleVin, customName, action } = body;
 
     if (!templateId || !ttlMinutes) {
       return NextResponse.json(
@@ -25,14 +25,26 @@ export async function POST(req: Request) {
       );
     }
 
-    const newSandbox = await provisionSandbox({
+    const result = await provisionSandbox({
       templateId,
       ttlMinutes: Number(ttlMinutes),
       vehicleVin,
       customName,
+      action,
     });
 
-    return NextResponse.json({ sandbox: newSandbox }, { status: 201 });
+    if (result.conflict) {
+      return NextResponse.json(
+        { 
+          conflict: true, 
+          message: 'An active sandbox is already running for this vehicle.',
+          existingSandbox: result.existingSandbox 
+        },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ sandbox: result.sandbox }, { status: 201 });
   } catch (error: unknown) {
     return NextResponse.json(
       { error: 'Failed to provision sandbox', details: error instanceof Error ? error.message : String(error) },

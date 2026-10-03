@@ -56,7 +56,8 @@ export async function provisionSandbox(params: {
   ttlMinutes: number;
   vehicleVin?: string;
   customName?: string;
-}): Promise<EphemeralSandbox> {
+  action?: 'create' | 'restart_ttl' | 'force_duplicate';
+}): Promise<{ sandbox: EphemeralSandbox; conflict?: boolean; existingSandbox?: EphemeralSandbox }> {
   if (!isAwsMode) {
     return mockEngine.createSandbox(params);
   }
@@ -86,12 +87,15 @@ export async function provisionSandbox(params: {
       console.log(`[KasaAutoBox] Real ECS Task launched: ${taskArn}`);
     }
 
-    // Fall back to complete the metadata with simulated realism
     return mockEngine.createSandbox(params);
   } catch (error) {
     console.warn('[KasaAutoBox] Failed to launch real ECS task, provisioning simulated sandbox:', error);
     return mockEngine.createSandbox(params);
   }
+}
+
+export async function fetchArchivedSandboxes(filter?: 'week' | 'month' | 'year') {
+  return mockEngine.listArchivedSandboxes(filter);
 }
 
 export async function stopSandbox(id: string): Promise<boolean> {
